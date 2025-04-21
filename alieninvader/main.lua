@@ -51,7 +51,7 @@ local uiFonts = {
 }
 
 -- Galaxy progression variables
-local galaxyLevel = 1
+local galaxyLevel = 0
 local newGalaxyMessage = nil
 local newGalaxyTimer = 0
 local NEW_GALAXY_MSG_TIME = 2.5
@@ -280,16 +280,25 @@ end
 
 -- Generate a new galaxy with more planets and harder enemies
 local oldGenerateNewGalaxy = generateNewGalaxy
-function generateNewGalaxy()
+function generateNewGalaxy(initial)
     unlockNextWeapon()
     galaxyBackground = generateGalaxyBackground()
-    galaxyLevel = galaxyLevel + 1
     local numPlanets = 3 + galaxyLevel -- Increase number of planets each galaxy
+    
+    galaxyLevel = galaxyLevel + 1
+    planetNames = {
+        "Zorath", "Eryndor", "Vexalon", "Thalora", "Cryonix", "Zephyra", "Lunaris", "Aetherion", "Draconis", "Solara",
+        "Nebulon", "Quorath", "Xythera", "Orionis", "Pyronix", "Celestara", "Galadorn", "Astralis", "Velocis", "Ignis",
+        "Aurion", "Stellara", "Chronos", "Ecliptica", "Novaera", "Polaris", "Syntara", "Lycoris", "Tritonix", "Eldara",
+        "Frostara", "Blazara", "Zenthara", "Krythos", "Omnara", "Vortara", "Nyxara", "Phantora", "Luminara", "Oblivion",
+        "Ravara", "Spectra", "Xenara", "Abyssara", "Erythion", "Halcyon", "Mystara", "Eosara", "Calythra", "Zyphara"
+    }
     planets = {}
     local angleStep = (2 * math.pi) / numPlanets
     local centerX, centerY = BASE_WIDTH / 2, BASE_HEIGHT / 2
     local radius = math.min(BASE_WIDTH, BASE_HEIGHT) / 2.5
     local resources = {"quantonium", "zyther_crystals", "plasma_gel"}
+
     -- Pick a galaxy name from the list, cycling if needed
     local galaxyName = galaxyNames[((galaxyLevel - 1) % #galaxyNames) + 1]
     for i = 1, numPlanets do
@@ -317,7 +326,8 @@ function generateNewGalaxy()
             x = px,
             y = py,
             radius = 18 + math.random(0, 10),
-            name = galaxyName .. " - Planet " .. i,
+            name = planetNames[math.random(1, #planetNames)],
+            -- name = galaxyName .. " - Planet " .. i,
             resource = res,
             conquered = false,
             baseDestroyed = false,
@@ -612,7 +622,12 @@ function initializeMapState()
     galaxyBackground = generateGalaxyBackground()
     print("Initializing Map State")
     currentTargetPlanet = nil -- Always clear selected planet on map init
-    generateNewGalaxy() -- Generate a new galaxy
+    if galaxyLevel == 1 then
+        -- First galaxy, use default planets
+        generateNewGalaxy(true)
+    else
+        generateNewGalaxy(false)
+    end
     upgradeMenu.active = false -- Ensure upgrade menu is closed initially
 end
 
