@@ -17,7 +17,7 @@ local playerStats = {
         maxHealth = 100,
         speed = 500, -- Increased speed
         damage = 10,
-        fireRate = 0.5, -- seconds between shots
+        fireRate = 0.2, -- Reduced fire rate for faster shooting
         shield = 60, -- current shield
         maxShield = 60, -- max shield
         shieldRegen = 10 -- shield points per second
@@ -32,7 +32,6 @@ local combatObjects = { -- Store all active objects in the combat state
     player = nil,
     playerArmada = {},
     enemies = {},
-    stations = {},
     bullets = {}
 }
 
@@ -236,26 +235,6 @@ local enemyArchetypes = {
         w = 54, h = 54,
         color = {1, 0.5, 0.2},
         shape = "rectangle"
-    },
-    small_fast = {
-        name = "Small Fast",
-        maxHealth = 60,
-        speed = 320,
-        damage = 7,
-        fireRate = 0.5,
-        w = 22, h = 22,
-        color = {0.3, 0.9, 1},
-        shape = "triangle"
-    },
-    medium = {
-        name = "Medium",
-        maxHealth = 110,
-        speed = 180,
-        damage = 11,
-        fireRate = 0.9,
-        w = 32, h = 32,
-        color = {1, 0, 0},
-        shape = "rectangle"
     }
 }
 
@@ -279,12 +258,10 @@ function unlockNextWeapon()
 end
 
 -- Generate a new galaxy with more planets and harder enemies
-local oldGenerateNewGalaxy = generateNewGalaxy
 function generateNewGalaxy(initial)
     unlockNextWeapon()
     galaxyBackground = generateGalaxyBackground()
-    local numPlanets = 3 + galaxyLevel -- Increase number of planets each galaxy
-    
+    local numPlanets = 3 + galaxyLevel
     galaxyLevel = galaxyLevel + 1
     planetNames = {
         "Zorath", "Eryndor", "Vexalon", "Thalora", "Cryonix", "Zephyra", "Lunaris", "Aetherion", "Draconis", "Solara",
@@ -293,56 +270,59 @@ function generateNewGalaxy(initial)
         "Frostara", "Blazara", "Zenthara", "Krythos", "Omnara", "Vortara", "Nyxara", "Phantora", "Luminara", "Oblivion",
         "Ravara", "Spectra", "Xenara", "Abyssara", "Erythion", "Halcyon", "Mystara", "Eosara", "Calythra", "Zyphara"
     }
+    -- Shuffle planetNames for this galaxy
+    local shuffledNames = {}
+    for i, v in ipairs(planetNames) do shuffledNames[i] = v end
+    for i = #shuffledNames, 2, -1 do
+        local j = math.random(i)
+        shuffledNames[i], shuffledNames[j] = shuffledNames[j], shuffledNames[i]
+    end
     planets = {}
     local angleStep = (2 * math.pi) / numPlanets
     local centerX, centerY = BASE_WIDTH / 2, BASE_HEIGHT / 2
     local radius = math.min(BASE_WIDTH, BASE_HEIGHT) / 2.5
     local resources = {"quantonium", "zyther_crystals", "plasma_gel"}
-
-    -- Pick a galaxy name from the list, cycling if needed
     local galaxyName = galaxyNames[((galaxyLevel - 1) % #galaxyNames) + 1]
     for i = 1, numPlanets do
         local angle = angleStep * (i - 1)
         local px = centerX + math.cos(angle) * radius * (0.7 + 0.3 * math.random())
         local py = centerY + math.sin(angle) * radius * (0.7 + 0.3 * math.random())
         local res = resources[(i - 1) % #resources + 1]
-        -- Randomly assign enemy archetypes for this planet
-        enemyTypes = {"big_slow", "small_fast", "medium"}
+        local enemyTypes = {}
+        local availableArchetypes = {"big_slow"}
         local nShips = 3 + math.floor(galaxyLevel * 1.5) + math.random(0, galaxyLevel)
         for s = 1, nShips do
-            local archetypeKey
-            local r = math.random()
-            if r < 0.33 then archetypeKey = "big_slow"
-            elseif r < 0.66 then archetypeKey = "small_fast"
-            else archetypeKey = "medium" end
+            local archetypeKey = availableArchetypes[math.random(1, #availableArchetypes)]
             table.insert(enemyTypes, archetypeKey)
         end
-        -- Monsters get stronger each level (base and station scale as before)
         local enemyHealth = 70 + (galaxyLevel - 1) * 18
         local enemyDamage = 5 + math.floor((galaxyLevel - 1) * 1.5)
         local baseHealth = 200 + (galaxyLevel - 1) * 40
         local baseDamage = 12 + math.floor((galaxyLevel - 1) * 2)
+        local planetName = shuffledNames[i] or (galaxyName .. " - Planet " .. i)
         local planet = {
             x = px,
             y = py,
             radius = 18 + math.random(0, 10),
-            name = planetNames[math.random(1, #planetNames)],
-            -- name = galaxyName .. " - Planet " .. i,
+            name = planetName,
             resource = res,
             conquered = false,
             baseDestroyed = false,
             color = {math.random(), math.random(), math.random()},
             enemyConfig = {
                 ships = nShips,
-                stations = math.floor(galaxyLevel / 2) + math.random(0, 1),
                 enemyTypes = enemyTypes,
                 enemyHealth = enemyHealth,
                 enemyDamage = enemyDamage,
                 baseHealth = baseHealth,
                 baseDamage = baseDamage
+            },
+            base = {
+                health = baseHealth,
+                damage = baseDamage,
+                isBase = true
             }
         }
-        print(planet.enemyConfig)
         table.insert(planets, planet)
     end
     newGalaxyMessage = "Entering " .. galaxyName .. "!"
@@ -351,8 +331,7 @@ end
 
 -- Simple collision detection function (AABB)
 function checkCollision(obj1, obj2)
-    if not obj1 or not obj2 or not obj1.x or not obj1.y or not obj1.w or not obj1.h or
-       not obj2.x or not obj2.y or not obj2.w or not obj2.h then
+    if not obj1 or not obj2 or not obj1.x or not obj2.x or not obj1.y or not obj2.y or not obj1.w or not obj2.w or not obj1.h or not obj2.h then
         return false -- Object missing required properties
     end
     return obj1.x < obj2.x + obj2.w and
@@ -364,52 +343,6 @@ end
 function setupScaling()
     scaleX = love.graphics.getWidth() / BASE_WIDTH
     scaleY = love.graphics.getHeight() / BASE_HEIGHT
-end
-
--- =========================================================================
--- STARFIELD ANIMATION
--- =========================================================================
-local starfield = {}
-local STAR_COUNT = 200
-
-function initializeStarfield()
-    starfield = {}
-    local origins = {
-        { x = BASE_WIDTH / 2, y = BASE_HEIGHT / 2 }, -- fallback center
-        { x = BASE_WIDTH / 4, y = BASE_HEIGHT / 4 },
-        { x = 3 * BASE_WIDTH / 4, y = BASE_HEIGHT / 4 },
-        { x = BASE_WIDTH / 4, y = 3 * BASE_HEIGHT / 4 },
-        { x = 3 * BASE_WIDTH / 4, y = 3 * BASE_HEIGHT / 4 }
-    }
-    for i = 1, STAR_COUNT do
-        local angle = math.random() * 2 * math.pi
-        local radius = math.random() * (BASE_WIDTH / 2)
-        table.insert(starfield, {
-            angle = angle,
-            distance = radius,
-            speed = math.random(120, 400),
-            size = math.random() * 1.5 + 0.5,
-            alpha = math.random() * 0.5 + 0.5,
-        })
-    end
-end
-
-function updateStarfield(dt)
-    for _, star in ipairs(starfield) do
-        star.distance = star.distance - star.speed * dt
-        if star.distance < 0 then
-            star.distance = BASE_WIDTH / 2
-        end
-    end
-end
-
-function drawStarfield()
-    for _, star in ipairs(starfield) do
-        local x = BASE_WIDTH / 2 + math.cos(star.angle) * star.distance
-        local y = BASE_HEIGHT / 2 + math.sin(star.angle) * star.distance
-        love.graphics.setColor(1, 1, 1, star.alpha)
-        love.graphics.circle("fill", x, y, star.size)
-    end
 end
 
 -- =========================================================================
@@ -427,9 +360,6 @@ function love.load()
     uiFonts.normal = love.graphics.newFont(18)   -- Smaller font for galaxy/map screen
     uiFonts.large = love.graphics.newFont(36)    -- Large font for combat and headings
 
-    -- Initialize starfield
-    initializeStarfield()
-
     -- TODO: Load assets (images, fonts, sounds) here
 
     -- Initialize Game States
@@ -439,13 +369,9 @@ end
 
 function love.resize(w, h)
     setupScaling()
-    initializeStarfield() -- Re-initialize starfield for new window size
 end
 
 function love.update(dt)
-    -- Update starfield for all scenes
-    updateStarfield(dt)
-
     -- Update logic based on the current game state
     if gameState == "map" then
         updateMapState(dt)
@@ -467,7 +393,7 @@ function love.update(dt)
                     maxHealth = 100,
                     speed = 500,
                     damage = 10,
-                    fireRate = 0.5,
+                    fireRate = 0.2,
                     shield = 60,
                     maxShield = 60,
                     shieldRegen = 10,
@@ -486,9 +412,6 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- Draw starfield background for all scenes
-    drawStarfield()
-
     -- Drawing logic based on the current game state
     if gameState == "map" then
         drawMapState()
@@ -509,6 +432,9 @@ function love.draw()
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
+    if button == 1 and combatObjects.player then -- Left click to shoot
+        combatObjects.player:shoot(x / scaleX, y / scaleY) -- Adjust for scaling
+    end
     if gameState == "gameover" and showScoreboard and button == 1 then
         local btnW, btnH = 220, 48
         local btnX = (love.graphics.getWidth() - btnW) / 2
@@ -524,7 +450,7 @@ function love.mousepressed(x, y, button, istouch, presses)
                     maxHealth = 100,
                     speed = 500,
                     damage = 10,
-                    fireRate = 0.5,
+                    fireRate = 0.2,
                     shield = 60,
                     maxShield = 60,
                     shieldRegen = 10,
@@ -598,7 +524,6 @@ function clearCombatObjects()
         player = nil,
         playerArmada = {},
         enemies = {},
-        stations = {},
         bullets = {}
     }
 end
@@ -986,18 +911,122 @@ function Ship.new(x, y, img, stats, type)
     instance.speed = stats.speed or 150
     instance.fireRate = stats.fireRate or 1
     instance.fireCooldown = 0
-    instance.type = type -- "player", "player_ai", "enemy_ship", "station", "base"
+    instance.type = type -- "player", "player_ai", "enemy_ship", "base"
     instance.target = nil -- For AI
     instance.moveInput = { x = 0, y = 0 } -- For player control
     instance.rotation = 0 -- New: rotation in radians
     instance.shield = stats.maxShield or 0
     instance.maxShield = stats.maxShield or 0
     instance.shieldRegen = stats.shieldRegen or 0
+    -- For enemy AI: add random movement state
+    if type == "enemy_ship" then
+        instance.ai = {
+            mode = "random", -- or "chase"
+            timer = math.random(1, 3),
+            dir = { x = math.random() * 2 - 1, y = math.random() * 2 - 1 }
+        }
+    end
     return instance
 end
 
 function Ship:update(dt)
-    if self.type == "player" then
+    if self.type == "player_ai" then
+        -- Assign a unique formation slot for each armada ship
+        local myIndex = nil
+        for i, ship in ipairs(combatObjects.playerArmada) do
+            if ship == self then myIndex = i break end
+        end
+        -- Target nearest enemy
+        local minDist, target = math.huge, nil
+        for _, enemy in ipairs(combatObjects.enemies) do
+            local dx, dy = enemy.x - self.x, enemy.y - self.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist < minDist then
+                minDist = dist
+                target = enemy
+            end
+        end
+        local tx, ty = nil, nil
+        if target then
+            tx, ty = target.x, target.y
+        end
+        -- Formation: spread ships in a circle around the target
+        local formationRadius = 80
+        local n = #combatObjects.playerArmada
+        local angle = 0
+        if myIndex and n > 1 then
+            angle = (2 * math.pi) * ((myIndex - 1) / n)
+        end
+        local offsetX, offsetY = 0, 0
+        if tx and ty then
+            offsetX = math.cos(angle) * formationRadius
+            offsetY = math.sin(angle) * formationRadius
+        end
+        -- Desired position is around the target, or just follow if no target
+        local desiredX, desiredY
+        if tx and ty then
+            desiredX = tx + offsetX
+            desiredY = ty + offsetY
+        else
+            desiredX = self.x
+            desiredY = self.y
+        end
+        -- Move toward desired position
+        local dx, dy = desiredX - self.x, desiredY - self.y
+        local dist = math.sqrt(dx * dx + dy * dy)
+        local moveX, moveY = 0, 0
+        if dist > 2 then -- Only move if not close enough
+            moveX = dx / dist
+            moveY = dy / dist
+        end
+        -- Strong separation from other armada ships
+        local sepX, sepY = 0, 0
+        local separationDist = 48
+        local separationForce = 2.5
+        for _, other in ipairs(combatObjects.playerArmada) do
+            if other ~= self then
+                local odx = self.x - other.x
+                local ody = self.y - other.y
+                local odist = math.sqrt(odx*odx + ody*ody)
+                if odist > 0 and odist < separationDist then
+                    local force = (separationDist - odist) / separationDist
+                    sepX = sepX + (odx / odist) * force
+                    sepY = sepY + (ody / odist) * force
+                end
+            end
+        end
+        -- Combine movement and separation
+        moveX = moveX + sepX * separationForce
+        moveY = moveY + sepY * separationForce
+        -- Normalize
+        local len = math.sqrt(moveX^2 + moveY^2)
+        if len > 0 then
+            moveX = moveX / len
+            moveY = moveY / len
+        end
+        self.x = self.x + moveX * self.speed * dt
+        self.y = self.y + moveY * self.speed * dt
+        -- Clamp position to screen bounds
+        self.x = math.max(0, math.min(love.graphics.getWidth() - self.w, self.x))
+        self.y = math.max(0, math.min(love.graphics.getHeight() - self.h, self.y))
+        -- Smoothly rotate toward movement direction
+        if moveX ~= 0 or moveY ~= 0 then
+            local desiredRot = math.atan2(moveY, moveX)
+            local rotDiff = desiredRot - (self.rotation or 0)
+            while rotDiff > math.pi do rotDiff = rotDiff - 2 * math.pi end
+            while rotDiff < -math.pi do rotDiff = rotDiff + 2 * math.pi end
+            local rotSpeed = 7.5
+            self.rotation = (self.rotation or 0) + math.max(-rotSpeed * dt, math.min(rotSpeed * dt, rotDiff))
+        end
+        -- Fire at the target if in range
+        if target then
+            local tdx, tdy = target.x - self.x, target.y - self.y
+            local tdist = math.sqrt(tdx*tdx + tdy*tdy)
+            if self.fireCooldown <= 0 and tdist < 400 then
+                self:shoot(target.x, target.y)
+            end
+        end
+    elseif self.type == "player" then
         self.x = self.x + self.moveInput.x * self.speed * dt
         self.y = self.y + self.moveInput.y * self.speed * dt
         -- Clamp position to screen bounds (basic)
@@ -1016,26 +1045,25 @@ function Ship:update(dt)
             local minDist, target = math.huge, nil
             for _, enemy in ipairs(combatObjects.enemies) do
                 local dx, dy = enemy.x - self.x, enemy.y - self.y
-                local dist = math.sqrt(dx*dx + dy*dy)
-                if dist < minDist then minDist = dist; target = enemy end
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist < minDist then
+                    minDist = dist
+                    target = enemy
+                end
             end
             if target then
                 tx, ty = target.x, target.y
-                -- Find this ship's index in the armada
-                local myIndex = 1
-                for i, ship in ipairs(combatObjects.playerArmada) do
-                    if ship == self then
-                        myIndex = i
-                        break
-                    end
+                -- Move towards the target
+                local dx, dy = tx - self.x, ty - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist > 0 then
+                    self.moveInput.x = dx / dist
+                    self.moveInput.y = dy / dist
                 end
-                local n = #combatObjects.playerArmada
-                local angle = ((myIndex-1) / n) * 2 * math.pi
-                local radius = 38 + 8 * n
-                formationOffsetX = math.cos(angle) * radius
-                formationOffsetY = math.sin(angle) * radius
-                tx = tx + formationOffsetX
-                ty = ty + formationOffsetY
+                -- Fire at the target if in range
+                if self.fireCooldown <= 0 and dist < 400 then
+                    self:shoot(tx, ty)
+                end
             end
         else
             -- Target player
@@ -1093,18 +1121,75 @@ function Ship:update(dt)
             if self.fireCooldown <= 0 and dist < 400 then
                 self:shoot(tx, ty)
             end
-        elseif self.type == "enemy_ship" and tx and ty then
-            local dx, dy = tx - self.x, ty - self.y
-            local dist = math.sqrt(dx*dx + dy*dy)
-            if self.fireCooldown <= 0 and dist < 400 then
-                self:shoot(tx, ty)
+        elseif self.type == "enemy_ship" then
+            -- Enemy AI: alternate between random movement and chasing player
+            if not self.ai then
+                self.ai = { mode = "random", timer = math.random(1, 3), dir = { x = math.random() * 2 - 1, y = math.random() * 2 - 1 } }
+            end
+            self.ai.timer = self.ai.timer - dt
+            if self.ai.timer <= 0 then
+                if self.ai.mode == "random" and math.random() < 0.5 then
+                    self.ai.mode = "chase"
+                    self.ai.timer = math.random(1, 2)
+                else
+                    self.ai.mode = "random"
+                    self.ai.timer = math.random(1, 3)
+                    local angle = math.random() * 2 * math.pi
+                    self.ai.dir.x = math.cos(angle)
+                    self.ai.dir.y = math.sin(angle)
+                end
+            end
+            local moveX, moveY = 0, 0
+            if self.ai.mode == "chase" and combatObjects.player then
+                local dx = combatObjects.player.x - self.x
+                local dy = combatObjects.player.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist > 0 then
+                    moveX = dx / dist
+                    moveY = dy / dist
+                end
+            else
+                moveX = self.ai.dir.x
+                moveY = self.ai.dir.y
+            end
+            -- Add a little random jitter
+            moveX = moveX + (math.random() - 0.5) * 0.2
+            moveY = moveY + (math.random() - 0.5) * 0.2
+            -- Normalize
+            local len = math.sqrt(moveX^2 + moveY^2)
+            if len > 0 then
+                moveX = moveX / len
+                moveY = moveY / len
+            end
+            self.x = self.x + moveX * self.speed * dt
+            self.y = self.y + moveY * self.speed * dt
+            -- Clamp position to screen bounds
+            self.x = math.max(0, math.min(love.graphics.getWidth() - self.w, self.x))
+            self.y = math.max(0, math.min(love.graphics.getHeight() - self.h, self.y))
+            -- Smoothly rotate toward movement direction
+            if moveX ~= 0 or moveY ~= 0 then
+                local desiredRot = math.atan2(moveY, moveX)
+                local rotDiff = desiredRot - (self.rotation or 0)
+                while rotDiff > math.pi do rotDiff = rotDiff - 2 * math.pi end
+                while rotDiff < -math.pi do rotDiff = rotDiff + 2 * math.pi end
+                local rotSpeed = 7.5
+                self.rotation = (self.rotation or 0) + math.max(-rotSpeed * dt, math.min(rotSpeed * dt, rotDiff))
+            end
+            -- Fire at player if in range
+            if combatObjects.player then
+                local dx = combatObjects.player.x - self.x
+                local dy = combatObjects.player.y - self.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if self.fireCooldown <= 0 and dist < 400 then
+                    self:shoot(combatObjects.player.x, combatObjects.player.y)
+                end
             end
         end
     end
 
-    -- Add slow shield regeneration
+    -- Add shield regeneration logic
     if self.shield and self.maxShield and self.shield < self.maxShield and self.shieldRegen and self.shieldRegen > 0 then
-        self.shield = math.min(self.maxShield, self.shield + (self.shieldRegen * 0.15) * dt)
+        self.shield = math.min(self.maxShield, self.shield + (self.shieldRegen * dt))
     end
 
     -- Update cooldowns
@@ -1123,6 +1208,36 @@ function Ship:draw()
         love.graphics.setColor(self.archetype.color)
         if self.archetype.shape == "rectangle" then
             love.graphics.rectangle("fill", -self.w/2, -self.h/2, self.w, self.h, 8, 8)
+        elseif self.archetype.shape == "circle" then
+            love.graphics.circle("fill", 0, 0, self.w / 2)
+        elseif self.archetype.shape == "hexagon" then
+            local points = {}
+            for i = 0, 5 do
+                local angle = math.rad(i * 60)
+                local px = math.cos(angle) * self.w / 2
+                local py = math.sin(angle) * self.h / 2
+                table.insert(points, px)
+                table.insert(points, py)
+            end
+            love.graphics.polygon("fill", points)
+        elseif self.archetype.shape == "diamond" then
+            local points = {
+                0, -self.h / 2,
+                -self.w / 2, 0,
+                0, self.h / 2,
+                self.w / 2, 0
+            }
+            love.graphics.polygon("fill", points)
+        elseif self.archetype.shape == "octagon" then
+            local points = {}
+            for i = 0, 7 do
+                local angle = math.rad(i * 45)
+                local px = math.cos(angle) * self.w / 2
+                local py = math.sin(angle) * self.h / 2
+                table.insert(points, px)
+                table.insert(points, py)
+            end
+            love.graphics.polygon("fill", points)
         else
             -- Default: triangle
             local base = self.w
@@ -1151,8 +1266,6 @@ function Ship:draw()
             love.graphics.setColor(0, 0.7, 0.7)
         elseif self.type == "enemy_ship" then
             love.graphics.setColor(1, 0, 0)
-        elseif self.type == "station" then
-            love.graphics.setColor(0.8, 0, 0.8)
         elseif self.type == "base" then
             love.graphics.setColor(0.2, 1, 0.2)
         end
@@ -1203,50 +1316,25 @@ end
 
 function Ship:shoot(targetX, targetY)
     if self.fireCooldown <= 0 then
-        local weapon = weaponTypes[playerWeaponLevel] or {name="Laser"}
+        local weapon = weaponTypes[playerWeaponLevel] or {name="Laser", damage=5}
         self.fireCooldown = self.fireRate
         local px = self.x + self.w / 2
         local py = self.y + self.h / 2
         local dx = targetX - px
         local dy = targetY - py
-        local dist = math.sqrt(dx*dx + dy*dy)
+        local dist = math.sqrt(dx * dx + dy * dy)
         local dirX, dirY = 0, 0
         if dist > 0 then
             dirX = dx / dist
             dirY = dy / dist
         else
-            dirY = (self.type == "player" or self.type == "player_ai") and -1 or 1
+            dirY = -1 -- Default direction if no target
         end
-        if weapon.name == "Laser" then
-            table.insert(combatObjects.bullets, {
-                x = px - 2, y = py - 2, w = 4, h = 8,
-                vx = dirX * 400, vy = dirY * 400,
-                damage = weapon.damage, ownerType = self.type
-            })
-        elseif weapon.name == "Spread Shot" then
-            for spread = -1, 1 do
-                local angle = math.atan2(dirY, dirX) + spread * 0.2
-                local spreadDirX = math.cos(angle)
-                local spreadDirY = math.sin(angle)
-                table.insert(combatObjects.bullets, {
-                    x = px - 2, y = py - 2, w = 4, h = 8,
-                    vx = spreadDirX * 400, vy = spreadDirY * 400,
-                    damage = weapon.damage, ownerType = self.type
-                })
-            end
-        elseif weapon.name == "Missile" then
-            table.insert(combatObjects.bullets, {
-                x = px - 4, y = py - 4, w = 8, h = 16,
-                vx = dirX * 300, vy = dirY * 300,
-                damage = weapon.damage, ownerType = self.type, splash = true
-            })
-        elseif weapon.name == "Pulse Beam" then
-            table.insert(combatObjects.bullets, {
-                x = px - 3, y = py - 3, w = 6, h = 12,
-                vx = dirX * 500, vy = dirY * 500,
-                damage = weapon.damage, ownerType = self.type
-            })
-        end
+        table.insert(combatObjects.bullets, {
+            x = px - 2, y = py - 2, w = 4, h = 8,
+            vx = dirX * 400, vy = dirY * 400,
+            damage = weapon.damage, ownerType = self.type
+        })
     end
 end
 
@@ -1268,18 +1356,29 @@ end
 function initializeCombatState(planet)
     print("Initializing Combat State for planet:", planet.name)
     clearCombatObjects()
+
+    -- Initialize player and armada
     combatObjects.player = Ship.new(BASE_WIDTH / 2, BASE_HEIGHT / 2, nil, playerStats.ship, "player")
+
+    -- Spread formation for player AI ships
+    local spreadRadius = 50
+    local angleStep = (2 * math.pi) / playerStats.armadaSize
     for i = 1, playerStats.armadaSize do
-        local x = BASE_WIDTH / 2 + math.random(-50, 50)
-        local y = BASE_HEIGHT / 2 + math.random(-50, 50)
+        local angle = angleStep * (i - 1)
+        local x = combatObjects.player.x + math.cos(angle) * spreadRadius
+        local y = combatObjects.player.y + math.sin(angle) * spreadRadius
         table.insert(combatObjects.playerArmada, Ship.new(x, y, nil, playerStats.ship, "player_ai"))
     end
+
+    -- Initialize enemy ships
     for _, enemyType in ipairs(planet.enemyConfig.enemyTypes) do
         local archetype = enemyArchetypes[enemyType]
         if archetype then
             local x = math.random(100, BASE_WIDTH - 100)
             local y = math.random(100, BASE_HEIGHT - 100)
-            table.insert(combatObjects.enemies, Ship.new(x, y, nil, archetype, "enemy_ship"))
+            local enemy = Ship.new(x, y, nil, archetype, "enemy_ship")
+            enemy.archetype = archetype -- Store the archetype for rendering
+            table.insert(combatObjects.enemies, enemy)
         end
     end
 end
@@ -1320,6 +1419,7 @@ function updateCombatState(dt)
     for i = #combatObjects.enemies, 1, -1 do
         local enemy = combatObjects.enemies[i]
         enemy:update(dt)
+        
         -- Enemy collision avoidance: push away from other enemies
         for j, other in ipairs(combatObjects.enemies) do
             if enemy ~= other then
@@ -1371,7 +1471,7 @@ function updateCombatState(dt)
                         goto next_bullet -- Stop checking this bullet against other enemies
                     end
                 end
-            elseif b.ownerType == "enemy_ship" or b.ownerType == "station" or b.ownerType == "base" then
+            elseif b.ownerType == "enemy_ship" or b.ownerType == "base" then
                  -- Check collision with player
                  if combatObjects.player and checkCollision(b, combatObjects.player) then
                       print("Player hit!")
@@ -1428,11 +1528,18 @@ function updateCombatState(dt)
     end
 
     -- Check Win Condition: all enemies and the base must be destroyed
-    local baseAlive = false
+    local baseExists = false
+    local shipsExist = false
+    
     for _, enemy in ipairs(combatObjects.enemies) do
-        if enemy.isBase then baseAlive = true end
+        if enemy.isBase then
+            baseExists = true
+        else
+            shipsExist = true
+        end
     end
-    if not baseAlive and #combatObjects.enemies == 0 and combatObjects.player then
+    
+    if not baseExists and not shipsExist and combatObjects.player then
         print("VICTORY! All enemies and base destroyed on", currentTargetPlanet.name)
         currentTargetPlanet.baseDestroyed = true
         changeState("harvesting", currentTargetPlanet)
@@ -1541,7 +1648,7 @@ function drawCombatState()
     for _, b in ipairs(combatObjects.bullets) do
         if b.color then
             love.graphics.setColor(b.color)
-        elseif b.ownerType == "enemy_ship" or b.ownerType == "station" or b.ownerType == "base" then
+        elseif b.ownerType == "enemy_ship" or b.ownerType == "base" then
             love.graphics.setColor(1, 0, 0) -- Enemy attacks are now red
         else
             love.graphics.setColor(0.5, 1, 1)
