@@ -1,5 +1,4 @@
 * multi-colored bullets (enemeis vsi friends)
-* shoot on spacebar only
 * top scores on galaxy
 * store top scores on firebase
 * rotating ships

@@ -7,8 +7,8 @@ main.lua - Entry point and core game logic
 local gameState = "map" -- Current game state: "map", "combat", "harvesting", "traveling"
 local playerResources = {
     quantonium = 0,
-    zyther_crystals = 0,
-    plasma_gel = 0,
+    zytherCrystals = 0,
+    plasmaGel = 0,
     -- Add more resources as needed
 }
 local playerStats = {
@@ -158,27 +158,35 @@ function triggerGameOver()
     gameOverTimer = GAME_OVER_MSG_TIME
     gameState = "gameover"
     table.insert(scoreboard, 1, {date=os.date("%Y-%m-%d %H:%M"), score=playerScore})
+    -- Keep only the last 10 scores
+    while #scoreboard > 10 do
+        table.remove(scoreboard)
+    end
     showScoreboard = true
 end
 
 function drawGameOver()
     love.graphics.setColor(0, 0, 0, 0.8)
     love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-    love.graphics.setColor(1, 0, 0)
-    love.graphics.setFont(uiFonts.large)
-    love.graphics.printf("GAME OVER", 0, love.graphics.getHeight() / 2 - 60, love.graphics.getWidth(), "center")
+    -- Only show GAME OVER if not just viewing scoreboard
+    if isGameOver then
+        love.graphics.setColor(1, 0, 0)
+        love.graphics.setFont(uiFonts.large)
+        love.graphics.printf("GAME OVER", 0, love.graphics.getHeight() / 2 - 60, love.graphics.getWidth(), "center")
+    end
     love.graphics.setFont(uiFonts.normal)
     love.graphics.setColor(1, 1, 1)
-    -- Only show restart message if not on scoreboard
-    if not showScoreboard then
+    -- Only show restart message if not on scoreboard and isGameOver
+    if isGameOver and not showScoreboard then
         love.graphics.printf("Restarting in a moment...", 0, love.graphics.getHeight() / 2 + 10, love.graphics.getWidth(), "center")
     end
-    -- Draw scoreboard
+    -- Draw scoreboard (last 10 scores)
     love.graphics.setFont(love.graphics.newFont(44))
     love.graphics.setColor(1, 1, 0.3)
     love.graphics.printf("SCOREBOARD", 0, 80, love.graphics.getWidth(), "center")
     love.graphics.setFont(love.graphics.newFont(32))
     for i, entry in ipairs(scoreboard) do
+        if i > 10 then break end
         local entryText = string.format("%2d. %s  %d", i, entry.date, entry.score)
         love.graphics.printf(entryText, 0, 120 + i * 40, love.graphics.getWidth(), "center")
     end
@@ -281,7 +289,7 @@ function generateNewGalaxy(initial)
     local angleStep = (2 * math.pi) / numPlanets
     local centerX, centerY = BASE_WIDTH / 2, BASE_HEIGHT / 2
     local radius = math.min(BASE_WIDTH, BASE_HEIGHT) / 2.5
-    local resources = {"quantonium", "zyther_crystals", "plasma_gel"}
+    local resources = {"quantonium", "zytherCrystals", "plasmaGel"}
     local galaxyName = galaxyNames[((galaxyLevel - 1) % #galaxyNames) + 1]
     for i = 1, numPlanets do
         local angle = angleStep * (i - 1)
@@ -386,7 +394,7 @@ function love.update(dt)
         if gameOverTimer <= 0 and not showScoreboard then
             -- Reset everything for a new game
             galaxyLevel = 1
-            playerResources = { quantonium = 0, zyther_crystals = 0, plasma_gel = 0 }
+            playerResources = { quantonium = 0, zytherCrystals = 0, plasmaGel = 0 }
             playerStats = {
                 ship = {
                     health = 100,
@@ -425,6 +433,11 @@ function love.draw()
         drawGameOver()
     end
 
+    -- Draw scoreboard if active
+    if showScoreboard then
+        drawGameOver() -- Reuse the scoreboard drawing
+    end
+
     -- Draw FPS (optional debug info)
     love.graphics.setColor(0, 1, 0, 1)
     love.graphics.print("FPS: " .. love.timer.getFPS(), 10, love.graphics.getHeight() - 20)
@@ -432,6 +445,14 @@ function love.draw()
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
+    if showScoreboard and button == 1 then
+        local btnW, btnH = 220, 48
+        local btnX = (love.graphics.getWidth() - btnW) / 2
+        local btnY = love.graphics.getHeight() - 120
+        if x > btnX and x < btnX + btnW and y > btnY and y < btnY + btnH then
+            showScoreboard = false
+            return
+        end
     if button == 1 and combatObjects.player then -- Left click to shoot
         combatObjects.player:shoot(x / scaleX, y / scaleY) -- Adjust for scaling
     end
@@ -443,7 +464,7 @@ function love.mousepressed(x, y, button, istouch, presses)
             showScoreboard = false
             -- Reset everything for a new game
             galaxyLevel = 1
-            playerResources = { quantonium = 0, zyther_crystals = 0, plasma_gel = 0 }
+            playerResources = { quantonium = 0, zytherCrystals = 0, plasmaGel = 0 }
             playerStats = {
                 ship = {
                     health = 100,
@@ -535,14 +556,13 @@ local upgradeMenu = {
     active = false,
     options = {
         { name = "Armada Size", cost = { quantonium = 5 }, action = function() if playerResources.quantonium >= 5 then playerResources.quantonium = playerResources.quantonium - 5; playerStats.armadaSize = playerStats.armadaSize + 1; print("Upgraded Armada Size") else print("Not enough Quantonium") end end },
-        { name = "Weapon Damage", cost = { zyther_crystals = 3 }, action = function() if playerResources.zyther_crystals >= 3 then playerResources.zyther_crystals = playerResources.zyther_crystals - 3; playerStats.ship.damage = playerStats.ship.damage + 2; print("Upgraded Weapon Damage") else print("Not enough Zyther Crystals") end end },
-        { name = "Shield Capacity", cost = { plasma_gel = 5 }, action = function() if playerResources.plasma_gel >= 5 then playerResources.plasma_gel = playerResources.plasma_gel - 5; playerStats.ship.maxShield = playerStats.ship.maxShield + 20; playerStats.ship.shield = playerStats.ship.maxShield; print("Upgraded Shield Capacity") else print("Not enough Plasma Gel") end end },
-        { name = "Shield Regen", cost = { quantonium = 3, plasma_gel = 2 }, action = function() if playerResources.quantonium >= 3 and playerResources.plasma_gel >= 2 then playerResources.quantonium = playerResources.quantonium - 3; playerResources.plasma_gel = playerResources.plasma_gel - 2; playerStats.ship.shieldRegen = playerStats.ship.shieldRegen + 4; print("Upgraded Shield Regen") else print("Not enough resources") end end },
-        { name = "Health Upgrade", cost = { zyther_crystals = 4 }, action = function() if playerResources.zyther_crystals >= 4 then playerResources.zyther_crystals = playerResources.zyther_crystals - 4; playerStats.ship.maxHealth = playerStats.ship.maxHealth + 20; playerStats.ship.health = playerStats.ship.maxHealth; print("Upgraded Max Health") else print("Not enough Zyther Crystals") end end },
+        { name = "Weapon Damage", cost = { zytherCrystals = 3 }, action = function() if playerResources.zytherCrystals >= 3 then playerResources.zytherCrystals = playerResources.zytherCrystals - 3; playerStats.ship.damage = playerStats.ship.damage + 2; print("Upgraded Weapon Damage") else print("Not enough Zyther Crystals") end end },
+        { name = "Shield Capacity", cost = { plasmaGel = 5 }, action = function() if playerResources.plasmaGel >= 5 then playerResources.plasmaGel = playerResources.plasmaGel - 5; playerStats.ship.maxShield = playerStats.ship.maxShield + 20; playerStats.ship.shield = playerStats.ship.maxShield; print("Upgraded Shield Capacity") else print("Not enough Plasma Gel") end end },
+        { name = "Shield Regen", cost = { quantonium = 3, plasmaGel = 2 }, action = function() if playerResources.quantonium >= 3 and playerResources.plasmaGel >= 2 then playerResources.quantonium = playerResources.quantonium - 3; playerResources.plasmaGel = playerResources.plasmaGel - 2; playerStats.ship.shieldRegen = playerStats.ship.shieldRegen + 4; print("Upgraded Shield Regen") else print("Not enough resources") end end },
+        { name = "Health Upgrade", cost = { zytherCrystals = 4 }, action = function() if playerResources.zytherCrystals >= 4 then playerResources.zytherCrystals = playerResources.zytherCrystals - 4; playerStats.ship.maxHealth = playerStats.ship.maxHealth + 20; playerStats.ship.health = playerStats.ship.maxHealth; print("Upgraded Max Health") else print("Not enough Zyther Crystals") end end },
     }
 }
 
-local oldInitializeMapState = initializeMapState
 function initializeMapState()
     galaxyBackground = generateGalaxyBackground()
     print("Initializing Map State")
@@ -710,6 +730,15 @@ function drawMapState()
     love.graphics.printf("Help", helpButton.x, helpButton.y + 6, helpButton.w, "center")
     love.graphics.setColor(1, 1, 1)
 
+    -- Draw Scoreboard Button
+    local scoreboardButton = { x = BASE_WIDTH - 150, y = 90, w = 140, h = 30 }
+    love.graphics.setColor(1, 0.85, 0.3)
+    love.graphics.rectangle("fill", scoreboardButton.x, scoreboardButton.y, scoreboardButton.w, scoreboardButton.h)
+    love.graphics.setColor(0, 0, 0)
+    love.graphics.setFont(uiFonts.normal)
+    love.graphics.printf("Scoreboard", scoreboardButton.x, scoreboardButton.y + 6, scoreboardButton.w, "center")
+    love.graphics.setColor(1, 1, 1)
+
     -- Draw Upgrade Menu if active
     if upgradeMenu.active then
         local menuW = 480
@@ -817,12 +846,17 @@ function handleMapMouseInput(x, y, button)
     if button == 1 then
         local upgradeButton = { x = BASE_WIDTH - 150, y = 10, w = 140, h = 30 }
         local helpButton = { x = BASE_WIDTH - 150, y = 50, w = 140, h = 30 }
+        local scoreboardButton = { x = BASE_WIDTH - 150, y = 90, w = 140, h = 30 }
         if x > upgradeButton.x and x < upgradeButton.x + upgradeButton.w and y > upgradeButton.y and y < upgradeButton.y + upgradeButton.h then
             upgradeMenu.active = not upgradeMenu.active
             return
         end
         if x > helpButton.x and x < helpButton.x + helpButton.w and y > helpButton.y and y < helpButton.y + helpButton.h then
             helpMenu.active = true
+            return
+        end
+        if x > scoreboardButton.x and x < scoreboardButton.x + scoreboardButton.w and y > scoreboardButton.y and y < scoreboardButton.y + scoreboardButton.h then
+            showScoreboard = true
             return
         end
 
@@ -917,7 +951,8 @@ function Ship.new(x, y, img, stats, type)
     instance.rotation = 0 -- New: rotation in radians
     instance.shield = stats.maxShield or 0
     instance.maxShield = stats.maxShield or 0
-    instance.shieldRegen = stats.shieldRegen or 0
+    instance.shieldRegen = (stats.shieldRegen or 0) * 0.4 -- Slower shield regen
+    instance.lastMoveDir = { x = 1, y = 0 } -- Default facing right
     -- For enemy AI: add random movement state
     if type == "enemy_ship" then
         instance.ai = {
@@ -1027,14 +1062,21 @@ function Ship:update(dt)
             end
         end
     elseif self.type == "player" then
-        self.x = self.x + self.moveInput.x * self.speed * dt
-        self.y = self.y + self.moveInput.y * self.speed * dt
+        local moveX = self.moveInput.x
+        local moveY = self.moveInput.y
+        self.x = self.x + moveX * self.speed * dt
+        self.y = self.y + moveY * self.speed * dt
         -- Clamp position to screen bounds (basic)
         self.x = math.max(0, math.min(love.graphics.getWidth() - self.w, self.x))
         self.y = math.max(0, math.min(love.graphics.getHeight() - self.h, self.y))
-        -- Update rotation based on movement direction
-        if self.moveInput.x ~= 0 or self.moveInput.y ~= 0 then
-            self.rotation = math.atan2(self.moveInput.y, self.moveInput.x)
+        -- Update rotation and last movement direction
+        if moveX ~= 0 or moveY ~= 0 then
+            self.rotation = math.atan2(moveY, moveX)
+            local len = math.sqrt(moveX * moveX + moveY * moveY)
+            if len > 0 then
+                self.lastMoveDir.x = moveX / len
+                self.lastMoveDir.y = moveY / len
+            end
         end
     elseif self.type == "player_ai" or self.type == "enemy_ship" then
         -- Formation targeting for player_ai: assign each ship a unique offset around the target
@@ -1045,7 +1087,7 @@ function Ship:update(dt)
             local minDist, target = math.huge, nil
             for _, enemy in ipairs(combatObjects.enemies) do
                 local dx, dy = enemy.x - self.x, enemy.y - self.y
-                local dist = math.sqrt(dx * dx + dy * dy)
+                local dist = math.sqrt(dx*dx + dy*dy)
                 if dist < minDist then
                     minDist = dist
                     target = enemy
@@ -1054,7 +1096,7 @@ function Ship:update(dt)
             if target then
                 tx, ty = target.x, target.y
                 -- Move towards the target
-                local dx, dy = tx - self.x, ty - self.y
+                local dx, dy = tx - self.x
                 local dist = math.sqrt(dx * dx + dy * dy)
                 if dist > 0 then
                     self.moveInput.x = dx / dist
@@ -1179,7 +1221,7 @@ function Ship:update(dt)
             if combatObjects.player then
                 local dx = combatObjects.player.x - self.x
                 local dy = combatObjects.player.y - self.y
-                local dist = math.sqrt(dx * dx + dy * dy)
+                local dist = math.sqrt(dx*dx + dy*dy)
                 if self.fireCooldown <= 0 and dist < 400 then
                     self:shoot(combatObjects.player.x, combatObjects.player.y)
                 end
@@ -1315,6 +1357,31 @@ function Ship:draw()
 end
 
 function Ship:shoot(targetX, targetY)
+    if self.type == "player" then
+        -- Ignore targetX/targetY, shoot in movement or last movement direction
+        local dirX, dirY
+        if self.moveInput.x ~= 0 or self.moveInput.y ~= 0 then
+            local len = math.sqrt(self.moveInput.x^2 + self.moveInput.y^2)
+            dirX = self.moveInput.x / len
+            dirY = self.moveInput.y / len
+        else
+            dirX = self.lastMoveDir.x
+            dirY = self.lastMoveDir.y
+        end
+        if self.fireCooldown <= 0 then
+            local weapon = weaponTypes[playerWeaponLevel] or {name="Laser", damage=5}
+            self.fireCooldown = self.fireRate
+            local px = self.x + self.w / 2
+            local py = self.y + self.h / 2
+            local bulletSpeed = 650 -- Increased bullet speed
+            table.insert(combatObjects.bullets, {
+                x = px - 2, y = py - 2, w = 4, h = 8,
+                vx = dirX * bulletSpeed, vy = dirY * bulletSpeed,
+                damage = weapon.damage, ownerType = self.type
+            })
+        end
+        return
+    end
     if self.fireCooldown <= 0 then
         local weapon = weaponTypes[playerWeaponLevel] or {name="Laser", damage=5}
         self.fireCooldown = self.fireRate
@@ -1330,9 +1397,10 @@ function Ship:shoot(targetX, targetY)
         else
             dirY = -1 -- Default direction if no target
         end
+        local bulletSpeed = 650 -- Increased bullet speed
         table.insert(combatObjects.bullets, {
             x = px - 2, y = py - 2, w = 4, h = 8,
-            vx = dirX * 400, vy = dirY * 400,
+            vx = dirX * bulletSpeed, vy = dirY * bulletSpeed,
             damage = weapon.damage, ownerType = self.type
         })
     end
@@ -1381,6 +1449,25 @@ function initializeCombatState(planet)
             table.insert(combatObjects.enemies, enemy)
         end
     end
+
+    -- Add stationary base to the enemy list
+    local baseStats = {
+        maxHealth = planet.base.health,
+        health = planet.base.health,
+        speed = 0,
+        damage = planet.base.damage,
+        fireRate = 1.2,
+        maxShield = 40 + (planet.base.health / 10),
+        shieldRegen = 2 + (planet.base.health / 100)
+    }
+    local baseX = BASE_WIDTH / 2
+    local baseY = BASE_HEIGHT * 0.2
+    local base = Ship.new(baseX, baseY, nil, baseStats, "base")
+    base.isBase = true
+    base.w = 64
+    base.h = 64
+    base.rotation = 0
+    table.insert(combatObjects.enemies, base)
 end
 
 function updateCombatState(dt)
@@ -1389,12 +1476,7 @@ function updateCombatState(dt)
         combatObjects.player:update(dt)
         -- Continuous fire if space is held
         if playerHoldingFire then
-            -- Shoot in aim direction
-            local px = combatObjects.player.x + combatObjects.player.w / 2
-            local py = combatObjects.player.y + combatObjects.player.h / 2
-            local aimX = px + (playerAim.x * 100)
-            local aimY = py + (playerAim.y * 100)
-            combatObjects.player:shoot(aimX, aimY)
+            combatObjects.player:shoot()
         end
         -- Handle spinning
         if playerSpinning then
