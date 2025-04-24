@@ -453,6 +453,7 @@ function love.mousepressed(x, y, button, istouch, presses)
             showScoreboard = false
             return
         end
+    end
     if button == 1 and combatObjects.player then -- Left click to shoot
         combatObjects.player:shoot(x / scaleX, y / scaleY) -- Adjust for scaling
     end
