@@ -6,3 +6,18 @@
 * level variety
     ** different ships
     ** different goals
+* powerups
+    * double shot
+    * quad shot
+    * fast shot
+    * shield doubler
+    * ...
+* obstacles
+    * moons that you can crash into and die
+    * big ships that you die if you crash on
+    * etc
+* saving progress
+* racing level? 
+* land on planet?
+* build a base?
+* robots harvest stuff?
