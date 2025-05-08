@@ -6,12 +6,17 @@ Based on War, with RPG classes and items.
 -- ========================================
 -- Configuration & Constants
 -- ========================================
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
+WINDOW_WIDTH = 3840
+WINDOW_HEIGHT = 2160
 
-CARD_WIDTH = 70
-CARD_HEIGHT = 100
-CARD_PADDING = 10
+-- Scaling factor for 4K (adjust base height if needed)
+-- Base height used for scaling calculations
+BASE_HEIGHT = 1080
+SCALE = WINDOW_HEIGHT / BASE_HEIGHT
+
+CARD_WIDTH = math.floor(70 * SCALE)
+CARD_HEIGHT = math.floor(100 * SCALE)
+CARD_PADDING = math.floor(10 * SCALE) -- Increased padding for better spacing
 
 -- RPG Classes
 CLASSES = {"Warrior", "Thief", "Mage"}
@@ -161,22 +166,49 @@ end
 
 function love.load()
     love.window.setTitle("Lofi Card War")
-    love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT)
+    -- Make the window resizable and allow high DPI
+    love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT, {
+        resizable = true,
+        minwidth = 640, -- Optional: Set minimum dimensions
+        minheight = 480,
+        highdpi = true -- Important for crisp rendering on scaled displays
+    })
     love.graphics.setBackgroundColor(0.1, 0.1, 0.15) -- Dark Lofi background
 
-    -- Load a simple font (replace 'path/to/font.ttf' if you have one, otherwise use default)
-    -- Download a free pixel font like 'Press Start 2P' or 'm5x7' for a better lofi feel
-    local success
-    success, gameFont = pcall(love.graphics.newFont, 20) -- Default font size 20
-    if not success or not gameFont then
-       print("Warning: Default font not found or failed to load. Using fallback.")
-       gameFont = love.graphics.newFont(12) -- Use built-in font as fallback
-    end
-     if gameFont then love.graphics.setFont(gameFont) end
+    -- Load font initially
+    updateFont()
 
     math.randomseed(os.time()) -- Seed RNG
 
     GAME_STATE = "menu" -- Start at the menu
+end
+
+-- Function to update font based on current scale
+function updateFont()
+    local fontSize = math.floor(20 * SCALE)
+    local success
+    success, gameFont = pcall(love.graphics.newFont, fontSize)
+    if not success or not gameFont then
+       print("Warning: Default font not found or failed to load. Using fallback.")
+       gameFont = love.graphics.newFont(math.floor(12 * SCALE))
+    end
+    if gameFont then love.graphics.setFont(gameFont) end
+end
+
+-- Handle window resize events
+function love.resize(w, h)
+    WINDOW_WIDTH = w
+    WINDOW_HEIGHT = h
+    -- Recalculate scale based on the new height
+    SCALE = WINDOW_HEIGHT / BASE_HEIGHT
+    -- Update card dimensions and padding based on new scale
+    CARD_WIDTH = math.floor(70 * SCALE)
+    CARD_HEIGHT = math.floor(100 * SCALE)
+    CARD_PADDING = math.floor(10 * SCALE)
+    -- Update font size based on new scale
+    updateFont()
+    -- Optional: You might need to reposition elements if their layout
+    -- depends on fixed aspect ratios or more complex logic than just scaling.
 end
 
 function love.update(dt)
@@ -218,33 +250,81 @@ function love.draw()
 
     -- Draw based on game state
     if GAME_STATE == "menu" then
-        love.graphics.printf(message, 0, WINDOW_HEIGHT / 2 - 20, WINDOW_WIDTH, "center")
+        love.graphics.printf(
+            message,
+            0,
+            WINDOW_HEIGHT / 2 - 40 * SCALE, -- Adjust vertical position based on scale
+            WINDOW_WIDTH,
+            "center"
+        )
     elseif GAME_STATE == "playing" or GAME_STATE == "war" or GAME_STATE == "gameover" then
-        -- Draw Player Area
-        love.graphics.print("Player Deck: " .. #playerDeck, 10, 10)
-        love.graphics.print("Item: " .. getItemString(playerItem), 10, 35)
+        -- Draw Player Area (Adjust positions with SCALE)
+        love.graphics.print(
+            "Player Deck: " .. #playerDeck,
+            20 * SCALE, -- Scale padding from edge
+            20 * SCALE
+        )
+        love.graphics.print(
+            "Item: " .. getItemString(playerItem),
+            20 * SCALE,
+            (20 + 35) * SCALE -- Scale vertical spacing
+        )
         if playerCard then
-            drawCard(playerCard, WINDOW_WIDTH / 2 - CARD_WIDTH - CARD_PADDING, WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2)
+            drawCard(
+                playerCard,
+                WINDOW_WIDTH / 2 - CARD_WIDTH - CARD_PADDING,
+                WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2
+            )
         else
-            drawCardBack(WINDOW_WIDTH / 2 - CARD_WIDTH - CARD_PADDING, WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2, #playerDeck)
+            drawCardBack(
+                WINDOW_WIDTH / 2 - CARD_WIDTH - CARD_PADDING,
+                WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2,
+                #playerDeck
+            )
         end
 
-        -- Draw Opponent Area
-        love.graphics.print("Opponent Deck: " .. #opponentDeck, WINDOW_WIDTH - 160, 10)
-         love.graphics.print("Item: " .. getItemString(opponentItem), WINDOW_WIDTH - 250, 35) -- Adjust position
+        -- Draw Opponent Area (Adjust positions with SCALE)
+        love.graphics.print(
+            "Opponent Deck: " .. #opponentDeck,
+            WINDOW_WIDTH - 200 * SCALE, -- Scale position from right edge
+            20 * SCALE
+        )
+         love.graphics.print(
+            "Item: " .. getItemString(opponentItem),
+            WINDOW_WIDTH - 300 * SCALE, -- Adjust position based on scaled text width estimate
+            (20 + 35) * SCALE
+        )
         if opponentCard then
-            drawCard(opponentCard, WINDOW_WIDTH / 2 + CARD_PADDING, WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2)
+            drawCard(
+                opponentCard,
+                WINDOW_WIDTH / 2 + CARD_PADDING,
+                WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2
+            )
         else
-            drawCardBack(WINDOW_WIDTH / 2 + CARD_PADDING, WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2, #opponentDeck)
+            drawCardBack(
+                WINDOW_WIDTH / 2 + CARD_PADDING,
+                WINDOW_HEIGHT / 2 - CARD_HEIGHT / 2,
+                #opponentDeck
+            )
         end
 
-        -- Draw War Pile Indicator
+        -- Draw War Pile Indicator (Adjust positions with SCALE)
         if #warPile > 0 then
-             love.graphics.print("War Pile: " .. #warPile, WINDOW_WIDTH / 2 - 50, WINDOW_HEIGHT / 2 + CARD_HEIGHT / 2 + 20)
+             love.graphics.print(
+                "War Pile: " .. #warPile,
+                WINDOW_WIDTH / 2 - 100 * SCALE, -- Center based on scaled text width estimate
+                WINDOW_HEIGHT / 2 + CARD_HEIGHT / 2 + 40 * SCALE -- Position below cards
+            )
         end
 
-        -- Draw Message Bar
-        love.graphics.printf(message, 0, WINDOW_HEIGHT - 50, WINDOW_WIDTH, "center")
+        -- Draw Message Bar (Adjust positions with SCALE)
+        love.graphics.printf(
+            message,
+            0,
+            WINDOW_HEIGHT - 100 * SCALE, -- Position from bottom
+            WINDOW_WIDTH,
+            "center"
+        )
     end
 end
 
@@ -252,23 +332,26 @@ end
 function drawCard(card, x, y)
     if not card then return end
     love.graphics.setColor(0.8, 0.8, 0.7) -- Light grey card color
-    love.graphics.rectangle("fill", x, y, CARD_WIDTH, CARD_HEIGHT, 5, 5) -- Rounded corners
+    -- Scale corner radius
+    love.graphics.rectangle("fill", x, y, CARD_WIDTH, CARD_HEIGHT, 5 * SCALE, 5 * SCALE)
 
     love.graphics.setColor(0.1, 0.1, 0.15) -- Dark text
-    love.graphics.printf(card.rank, x, y + 5, CARD_WIDTH, "center")
-    love.graphics.printf(card.suit:sub(1,3), x, y + 30, CARD_WIDTH, "center")
-    love.graphics.printf(card.class:sub(1,1), x, y + 55, CARD_WIDTH, "center") -- Class initial
-    love.graphics.printf(tostring(card.value), x, y + CARD_HEIGHT - 25, CARD_WIDTH, "center") -- Base value
+    -- Scale text positions within the card
+    love.graphics.printf(card.rank, x, y + 10 * SCALE, CARD_WIDTH, "center")
+    love.graphics.printf(card.suit:sub(1,3), x, y + (CARD_HEIGHT * 0.4), CARD_WIDTH, "center") -- Adjust relative position
+    love.graphics.printf(card.class:sub(1,1), x, y + (CARD_HEIGHT * 0.65), CARD_WIDTH, "center") -- Adjust relative position
+    love.graphics.printf(tostring(card.value), x, y + CARD_HEIGHT - 35 * SCALE, CARD_WIDTH, "center") -- Position from bottom
 end
 
 -- Function to draw a card back
 function drawCardBack(x, y, count)
      love.graphics.setColor(0.4, 0.2, 0.3) -- Dark purple/red back
-     love.graphics.rectangle("fill", x, y, CARD_WIDTH, CARD_HEIGHT, 5, 5)
+     -- Scale corner radius
+     love.graphics.rectangle("fill", x, y, CARD_WIDTH, CARD_HEIGHT, 5 * SCALE, 5 * SCALE)
      love.graphics.setColor(0.9, 0.9, 0.8)
-     love.graphics.printf("?", x, y + CARD_HEIGHT/2 - 10, CARD_WIDTH, "center")
-     -- Optionally display card count on the back
-     love.graphics.printf(tostring(count), x, y + 5, CARD_WIDTH, "center")
+     -- Scale text positions
+     love.graphics.printf("?", x, y + CARD_HEIGHT/2 - 20 * SCALE, CARD_WIDTH, "center") -- Center '?' vertically
+     love.graphics.printf(tostring(count), x, y + 10 * SCALE, CARD_WIDTH, "center") -- Position count near top
 end
 
 -- ========================================
