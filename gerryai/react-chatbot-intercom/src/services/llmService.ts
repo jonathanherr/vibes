@@ -1,0 +1,175 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import axios from 'axios';
+import { LLMConfig, LLMResponse } from '../types';
+
+export class LLMService {
+  private geminiClient: GoogleGenerativeAI | null = null;
+  private config: LLMConfig;
+
+  constructor(config: LLMConfig) {
+    this.config = config;
+    
+    console.log('LLMService constructor called with config:', {
+      provider: config.provider,
+      hasApiKey: config.provider === 'gemini' ? !!config.apiKey : 'N/A',
+      apiKeyPrefix: config.provider === 'gemini' && config.apiKey ? config.apiKey.substring(0, 10) : 'none',
+      baseUrl: config.provider === 'vllm' ? config.baseUrl : 'N/A'
+    });
+    
+    if (config.provider === 'gemini' && config.apiKey) {
+      try {
+        this.geminiClient = new GoogleGenerativeAI(config.apiKey);
+        console.log('Gemini client initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize Gemini client:', error);
+        throw error;
+      }
+    } else if (config.provider === 'gemini') {
+      console.warn('Gemini provider selected but no API key provided');
+    }
+  }
+
+  async generateResponse(prompt: string, conversationHistory?: string[]): Promise<LLMResponse> {
+    try {
+      if (this.config.provider === 'gemini') {
+        return await this.generateGeminiResponse(prompt, conversationHistory);
+      } else if (this.config.provider === 'vllm') {
+        return await this.generateVLLMResponse(prompt, conversationHistory);
+      } else {
+        throw new Error(`Unsupported LLM provider: ${this.config.provider}`);
+      }
+    } catch (error) {
+      console.error('LLM generation error:', error);
+      throw new Error('Failed to generate response from LLM');
+    }
+  }
+
+  private async generateGeminiResponse(prompt: string, conversationHistory?: string[]): Promise<LLMResponse> {
+    if (!this.geminiClient) {
+      throw new Error('Gemini client not initialized. Please check your API key.');
+    }
+
+    console.log('Generating Gemini response for prompt:', prompt.substring(0, 50) + '...');
+
+    const model = this.geminiClient.getGenerativeModel({ 
+      model: this.config.model || 'gemini-pro',
+      generationConfig: {
+        temperature: this.config.temperature || 0.7,
+        maxOutputTokens: this.config.maxTokens || 1000,
+      }
+    });
+
+    // Build conversation context
+    let fullPrompt = prompt;
+    if (conversationHistory && conversationHistory.length > 0) {
+      const context = conversationHistory.slice(-10).join('\n'); // Last 10 messages for context
+      fullPrompt = `Previous conversation:\n${context}\n\nCurrent message: ${prompt}`;
+    }
+
+    console.log('Sending request to Gemini with prompt length:', fullPrompt.length);
+
+    try {
+      const result = await model.generateContent(fullPrompt);
+      const response = await result.response;
+      const text = response.text();
+
+      console.log('Gemini response received:', {
+        length: text.length,
+        preview: text.substring(0, 100) + '...'
+      });
+
+      return {
+        text,
+        confidence: 0.9 // Gemini doesn't provide confidence scores
+      };
+    } catch (error) {
+      console.error('Gemini API error:', error);
+      throw new Error(`Gemini API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async generateVLLMResponse(prompt: string, conversationHistory?: string[]): Promise<LLMResponse> {
+    if (!this.config.baseUrl) {
+      throw new Error('vLLM base URL not configured');
+    }
+
+    // Build messages array for chat completion
+    const messages = [];
+    
+    // Add conversation history
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationHistory.slice(-10).forEach((msg, index) => {
+        messages.push({
+          role: index % 2 === 0 ? 'user' : 'assistant',
+          content: msg
+        });
+      });
+    }
+
+    // Add current prompt
+    messages.push({
+      role: 'user',
+      content: prompt
+    });
+
+    const requestBody = {
+      model: this.config.model || 'llama-2-7b-chat',
+      messages,
+      temperature: this.config.temperature || 0.7,
+      max_tokens: this.config.maxTokens || 1000,
+      stream: false
+    };
+
+    const response = await axios.post(
+      `${this.config.baseUrl}/v1/chat/completions`,
+      requestBody,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000 // 30 second timeout
+      }
+    );
+
+    if (!response.data.choices || response.data.choices.length === 0) {
+      throw new Error('No response from vLLM server');
+    }
+
+    const choice = response.data.choices[0];
+    return {
+      text: choice.message.content,
+      confidence: choice.logprobs ? Math.exp(choice.logprobs) : undefined
+    };
+  }
+
+  updateConfig(newConfig: LLMConfig) {
+    this.config = { ...this.config, ...newConfig };
+    
+    // Reinitialize Gemini client if provider or API key changed
+    if (newConfig.provider === 'gemini' && newConfig.apiKey) {
+      this.geminiClient = new GoogleGenerativeAI(newConfig.apiKey);
+    }
+  }
+
+  getConfig(): LLMConfig {
+    return { ...this.config };
+  }
+}
+
+// Default configurations
+export const defaultLLMConfigs = {
+  gemini: {
+    provider: 'gemini' as const,
+    model: 'gemini-pro',
+    temperature: 0.7,
+    maxTokens: 1000,
+    apiKey: process.env.REACT_APP_GEMINI_API_KEY || ''
+  },
+  vllm: {
+    provider: 'vllm' as const,
+    baseUrl: process.env.REACT_APP_VLLM_BASE_URL || 'http://localhost:8000',
+    model: 'llama-2-7b-chat',
+    temperature: 0.7,
+    maxTokens: 1000
+  }
+};
