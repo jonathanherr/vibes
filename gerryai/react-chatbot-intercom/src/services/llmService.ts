@@ -45,6 +45,11 @@ export class LLMService {
   }
 
   private async generateGeminiResponse(prompt: string, conversationHistory?: string[]): Promise<LLMResponse> {
+    // Check if proxy mode is enabled
+    if (this.config.proxyBaseUrl) {
+      return await this.generateGeminiProxyResponse(prompt, conversationHistory);
+    }
+
     if (!this.geminiClient) {
       throw new Error('Gemini client not initialized. Please check your API key.');
     }
@@ -85,6 +90,49 @@ export class LLMService {
     } catch (error) {
       console.error('Gemini API error:', error);
       throw new Error(`Gemini API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async generateGeminiProxyResponse(prompt: string, conversationHistory?: string[]): Promise<LLMResponse> {
+    console.log('Using Gemini proxy for text generation:', this.config.proxyBaseUrl);
+
+    try {
+      const response = await axios.post(
+        `${this.config.proxyBaseUrl}/generate-text`,
+        {
+          prompt,
+          model: this.config.model || 'gemini-1.5-flash',
+          temperature: this.config.temperature || 0.7,
+          maxTokens: this.config.maxTokens || 1000,
+          conversationHistory: conversationHistory || []
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000
+        }
+      );
+
+      if (!response.data.text) {
+        throw new Error('No text returned from proxy');
+      }
+
+      console.log('Proxy response received:', {
+        length: response.data.text.length,
+        preview: response.data.text.substring(0, 100) + '...'
+      });
+
+      return {
+        text: response.data.text,
+        confidence: 0.9
+      };
+    } catch (error) {
+      console.error('Gemini proxy error:', error);
+      if (axios.isAxiosError(error)) {
+        throw new Error(`Proxy API error: ${error.response?.data?.error || error.message}`);
+      }
+      throw new Error(`Proxy error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -142,6 +190,47 @@ export class LLMService {
     };
   }
 
+  async listGeminiModels(): Promise<string[]> {
+    if (!this.geminiClient) {
+      throw new Error('Gemini client not initialized. Please check your API key.');
+    }
+
+    try {
+      // Use the REST API to list models since the SDK doesn't have a direct method
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${this.config.apiKey}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Available Gemini models:', data);
+
+      // Extract model names and filter for generative models
+      const models = data.models
+        ?.filter((model: any) => 
+          model.name?.includes('gemini') && 
+          model.supportedGenerationMethods?.includes('generateContent')
+        )
+        ?.map((model: any) => model.name.replace('models/', ''))
+        ?.sort() || [];
+
+      return models.length > 0 ? models : ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    } catch (error) {
+      console.error('Error fetching Gemini models:', error);
+      // Return default models if fetch fails
+      return ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    }
+  }
+
   updateConfig(newConfig: LLMConfig) {
     this.config = { ...this.config, ...newConfig };
     
@@ -160,7 +249,7 @@ export class LLMService {
 export const defaultLLMConfigs = {
   gemini: {
     provider: 'gemini' as const,
-    model: 'gemini-pro',
+    model: 'gemini-1.5-flash',
     temperature: 0.7,
     maxTokens: 1000,
     apiKey: process.env.REACT_APP_GEMINI_API_KEY || ''

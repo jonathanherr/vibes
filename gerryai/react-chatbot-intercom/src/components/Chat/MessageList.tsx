@@ -1,5 +1,7 @@
 import React from 'react';
 import { Message } from '../../types';
+import ImageViewer from '../Media/ImageViewer';
+import VideoPlayer from '../Media/VideoPlayer';
 
 interface MessageListProps {
   messages: Message[];
@@ -23,12 +25,15 @@ const MessageList: React.FC<MessageListProps> = ({ messages }) => {
               {message.mediaUrl && (
                 <div className="message-media">
                   {message.type === 'image' && (
-                    <img src={message.mediaUrl} alt="Shared content" />
+                    <ImageViewer 
+                      src={message.mediaUrl} 
+                      alt="Generated image" 
+                      width={300}
+                      height={300}
+                    />
                   )}
                   {message.type === 'video' && (
-                    <video controls>
-                      <source src={message.mediaUrl} type="video/mp4" />
-                    </video>
+                    <VideoPlayer videoUrl={message.mediaUrl} />
                   )}
                 </div>
               )}

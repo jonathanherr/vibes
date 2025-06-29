@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { LLMService } from '../services/llmService';
+import { ImageGenService } from '../services/imageGenService';
 import { LLMConfig, LLMResponse, ChatSettings } from '../types';
 
 export const useLLM = () => {
@@ -8,29 +9,44 @@ export const useLLM = () => {
     vllmUrl: process.env.REACT_APP_VLLM_BASE_URL || 'NOT SET'
   });
   const [llmService, setLLMService] = useState<LLMService | null>(null);
+  const [imageGenService, setImageGenService] = useState<ImageGenService | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ChatSettings>(() => {
     const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY || '';
     const vllmBaseUrl = process.env.REACT_APP_VLLM_BASE_URL || 'http://localhost:8000';
+    const imageGenBaseUrl = process.env.REACT_APP_VLLM_IMAGE_BASE_URL || 'http://localhost:8001';
+    const geminiProxyBaseUrl = process.env.REACT_APP_GEMINI_PROXY_BASE_URL || '';
     
     console.log('Initial environment variables:', {
       geminiApiKey: geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'none',
-      vllmBaseUrl
+      vllmBaseUrl,
+      imageGenBaseUrl,
+      geminiProxyBaseUrl: geminiProxyBaseUrl || 'none'
     });
     
     return {
       selectedLLM: 'gemini',
       geminiConfig: {
         apiKey: geminiApiKey,
-        model: 'gemini-pro',
-        temperature: 0.7
+        model: 'gemini-1.5-flash',
+        temperature: 0.7,
+        proxyBaseUrl: geminiProxyBaseUrl
       },
       vllmConfig: {
         baseUrl: vllmBaseUrl,
         model: 'llama-2-7b-chat',
         temperature: 0.7,
         maxTokens: 1000
+      },
+      imageGenConfig: {
+        provider: 'gemini',
+        apiKey: geminiApiKey,
+        model: 'gemini-2.0-flash-preview-image-generation',
+        steps: 20,
+        width: 512,
+        height: 512,
+        proxyUrl: 'http://localhost:3001/api/generate-image' // Set default proxy URL
       }
     };
   });
@@ -42,7 +58,8 @@ export const useLLM = () => {
           provider: 'gemini',
           apiKey: settings.geminiConfig.apiKey,
           model: settings.geminiConfig.model,
-          temperature: settings.geminiConfig.temperature
+          temperature: settings.geminiConfig.temperature,
+          proxyBaseUrl: settings.geminiConfig.proxyBaseUrl
         }
       : {
           provider: 'vllm',
@@ -68,6 +85,28 @@ export const useLLM = () => {
       console.error('LLM service initialization error:', errorMessage);
       setError(errorMessage);
       setLLMService(null);
+    }
+
+    // Initialize image generation service
+    try {
+      const imageGenConfig = {
+        provider: settings.imageGenConfig.provider,
+        apiKey: settings.imageGenConfig.provider === 'gemini' 
+          ? settings.geminiConfig.apiKey 
+          : undefined,
+        baseUrl: settings.imageGenConfig.baseUrl,
+        model: settings.imageGenConfig.model,
+        steps: settings.imageGenConfig.steps,
+        width: settings.imageGenConfig.width,
+        height: settings.imageGenConfig.height
+      };
+      
+      const imageService = new ImageGenService(imageGenConfig);
+      setImageGenService(imageService);
+      console.log('Image generation service initialized successfully with provider:', settings.imageGenConfig.provider);
+    } catch (err) {
+      console.error('Image generation service initialization error:', err);
+      setImageGenService(null);
     }
   }, [settings]);
 
@@ -104,6 +143,30 @@ export const useLLM = () => {
     }
   }, [llmService, settings.selectedLLM]);
 
+  const generateImage = useCallback(async (prompt: string): Promise<string> => {
+    if (!imageGenService) {
+      throw new Error('Image generation service not initialized');
+    }
+
+    console.log('Generating image with prompt:', prompt);
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const imageUrl = await imageGenService.generateImage(prompt);
+      console.log('Image generated successfully');
+      return imageUrl;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate image';
+      console.error('Image generation error:', err);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [imageGenService]);
+
   const switchLLM = useCallback((provider: 'gemini' | 'vllm') => {
     setSettings(prev => ({
       ...prev,
@@ -125,6 +188,13 @@ export const useLLM = () => {
     }));
   }, []);
 
+  const updateImageGenConfig = useCallback((config: Partial<ChatSettings['imageGenConfig']>) => {
+    setSettings(prev => ({
+      ...prev,
+      imageGenConfig: { ...prev.imageGenConfig, ...config }
+    }));
+  }, []);
+
   const isConfigured = useCallback(() => {
     const configured = settings.selectedLLM === 'gemini' 
       ? !!settings.geminiConfig.apiKey
@@ -140,15 +210,31 @@ export const useLLM = () => {
     return configured;
   }, [settings.selectedLLM, settings.geminiConfig.apiKey, settings.vllmConfig.baseUrl]);
 
+  const fetchGeminiModels = useCallback(async (): Promise<string[]> => {
+    if (!llmService || settings.selectedLLM !== 'gemini') {
+      return ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    }
+
+    try {
+      return await llmService.listGeminiModels();
+    } catch (error) {
+      console.error('Failed to fetch Gemini models:', error);
+      return ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    }
+  }, [llmService, settings.selectedLLM]);
+
   return {
     generateResponse,
+    generateImage,
     isLoading,
     error,
     settings,
     switchLLM,
     updateGeminiConfig,
     updateVLLMConfig,
+    updateImageGenConfig,
     isConfigured,
-    currentProvider: settings.selectedLLM
+    currentProvider: settings.selectedLLM,
+    fetchGeminiModels
   };
 };

@@ -21,6 +21,7 @@ const App = () => {
           </Route>
         </Switch>
       </Layout>
+      <LLMTest />
     </Router>
   );
 };

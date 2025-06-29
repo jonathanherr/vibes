@@ -10,7 +10,7 @@ const ChatContainer: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
-      text: 'Hello! I\'m your AI assistant. Try typing a message or click the microphone button to use voice input. Configure your AI provider in the settings above for better responses!',
+      text: 'Hello! I\'m your AI assistant powered by Gemini. I can chat with you and create placeholder images! Try typing a message, ask me to "draw something" (shows placeholder for now), or click the microphone button to use voice input. Configure your Gemini API key in the settings above!',
       timestamp: new Date(),
       isUser: false,
       type: 'text'
@@ -18,7 +18,7 @@ const ChatContainer: React.FC = () => {
   ]);
   const [conversationHistory, setConversationHistory] = useState<string[]>([]);
   const { speak, isSpeaking } = useSpeechSynthesis();
-  const { generateResponse, isLoading, error: llmError, isConfigured, settings, currentProvider } = useLLM();
+  const { generateResponse, generateImage, isLoading, error: llmError, isConfigured, settings, currentProvider } = useLLM();
 
   const handleSendMessage = useCallback(async (text: string) => {
     const userMessage: Message = {
@@ -36,9 +36,49 @@ const ChatContainer: React.FC = () => {
     setConversationHistory(newHistory);
 
     try {
+      const configStatus = isConfigured();
+      
+      // Check if this is a drawing request
+      const isDrawingRequest = /\b(draw|create|generate|make|paint|sketch|illustrate).*\b(image|picture|artwork|drawing|illustration|painting)/i.test(text) ||
+                              /^(draw|create|generate|make|paint|sketch|illustrate)\s+/i.test(text.trim());
+
+      if (isDrawingRequest && configStatus) {
+        // Handle image generation
+        console.log('Detected drawing request, generating image...');
+        
+        try {
+          const imageUrl = await generateImage(text);
+          
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            text: `I've created an image based on your request: "${text}"`,
+            timestamp: new Date(),
+            isUser: false,
+            type: 'image',
+            mediaUrl: imageUrl
+          };
+
+          setMessages(prev => [...prev, aiMessage]);
+          
+          // Update conversation history
+          setConversationHistory(prev => [...prev, `Generated image: ${text}`]);
+          
+          // Speak the response
+          try {
+            await speak("I've generated an image for you!");
+          } catch (speechError) {
+            console.log('Speech synthesis not available or failed:', speechError);
+          }
+          
+          return; // Exit early, don't continue to text generation
+        } catch (imageError) {
+          console.error('Image generation failed, falling back to text response:', imageError);
+          // Fall through to regular text generation with error context
+        }
+      }
+      
       let aiResponseText: string;
       
-      const configStatus = isConfigured();
       const apiKey = settings.geminiConfig.apiKey;
       console.log('Configuration check:', {
         isConfigured: configStatus,
@@ -99,7 +139,7 @@ const ChatContainer: React.FC = () => {
       
       setMessages(prev => [...prev, errorMessage]);
     }
-  }, [generateResponse, conversationHistory, speak, isConfigured, settings, currentProvider]);
+  }, [generateResponse, generateImage, conversationHistory, speak, isConfigured, settings, currentProvider]);
 
   return (
     <div className="chat-container">
