@@ -1,0 +1,179 @@
+{
+  "Alice": {
+    "total_wins": 0,
+    "total_games": 5,
+    "last_won_date": null,
+    "created_date": "2025-09-26T20:11:59.068157",
+    "recent_scores": [
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.068329"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.068455"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.068585"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.068686"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.068765"
+      }
+    ]
+  },
+  "Bob": {
+    "total_wins": 8,
+    "total_games": 10,
+    "last_won_date": "2025-09-26T20:11:59.069937",
+    "created_date": "2025-09-26T20:11:59.068935",
+    "recent_scores": [
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069061"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069168"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069265"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069375"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069557"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069678"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069820"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.069939"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.070076"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.070217"
+      }
+    ]
+  },
+  "Charlie": {
+    "total_wins": 2,
+    "total_games": 8,
+    "last_won_date": "2025-09-26T20:11:59.070694",
+    "created_date": "2025-09-26T20:11:59.070408",
+    "recent_scores": [
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.070549"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.070696"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.070847"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.071005"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.071148"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.071287"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.071423"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.071560"
+      }
+    ]
+  },
+  "Diana": {
+    "total_wins": 4,
+    "total_games": 6,
+    "last_won_date": "2025-09-26T20:11:59.072406",
+    "created_date": "2025-09-26T20:11:59.071771",
+    "recent_scores": [
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.071920"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.072102"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.072256"
+      },
+      {
+        "score": 5,
+        "won": true,
+        "date": "2025-09-26T20:11:59.072409"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.072568"
+      },
+      {
+        "score": 3,
+        "won": false,
+        "date": "2025-09-26T20:11:59.072726"
+      }
+    ]
+  }
+}
